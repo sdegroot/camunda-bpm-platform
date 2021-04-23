@@ -16,13 +16,16 @@
  */
 package org.camunda.bpm.engine.impl.cmd;
 
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.camunda.bpm.engine.BadUserRequestException;
 import org.camunda.bpm.engine.exception.NullValueException;
 import org.camunda.bpm.engine.impl.cfg.CommandChecker;
 import org.camunda.bpm.engine.impl.cfg.ProcessEngineConfigurationImpl;
+import org.camunda.bpm.engine.impl.core.variable.VariableUtil;
 import org.camunda.bpm.engine.impl.interceptor.Command;
 import org.camunda.bpm.engine.impl.interceptor.CommandContext;
 import org.camunda.bpm.engine.impl.migration.MigrationInstructionGenerator;
@@ -32,6 +35,7 @@ import org.camunda.bpm.engine.impl.migration.MigrationPlanImpl;
 import org.camunda.bpm.engine.impl.migration.validation.instruction.MigrationInstructionValidationReportImpl;
 import org.camunda.bpm.engine.impl.migration.validation.instruction.MigrationInstructionValidator;
 import org.camunda.bpm.engine.impl.migration.validation.instruction.MigrationPlanValidationReportImpl;
+import org.camunda.bpm.engine.impl.migration.validation.instruction.MigrationVariableValidationReportImpl;
 import org.camunda.bpm.engine.impl.migration.validation.instruction.ValidatingMigrationInstruction;
 import org.camunda.bpm.engine.impl.migration.validation.instruction.ValidatingMigrationInstructionImpl;
 import org.camunda.bpm.engine.impl.migration.validation.instruction.ValidatingMigrationInstructions;
@@ -42,6 +46,10 @@ import org.camunda.bpm.engine.impl.util.EngineUtilLogger;
 import org.camunda.bpm.engine.impl.util.EnsureUtil;
 import org.camunda.bpm.engine.migration.MigrationInstruction;
 import org.camunda.bpm.engine.migration.MigrationPlan;
+import org.camunda.bpm.engine.migration.MigrationVariableValidationReport;
+import org.camunda.bpm.engine.variable.VariableMap;
+import org.camunda.bpm.engine.variable.Variables;
+import org.camunda.bpm.engine.variable.value.TypedValue;
 
 /**
  * @author Thorben Lindhauer
@@ -73,10 +81,49 @@ public class CreateMigrationPlanCmd implements Command<MigrationPlan> {
 
     instructions.addAll(migrationBuilder.getExplicitMigrationInstructions());
     migrationPlan.setInstructions(instructions);
+    VariableMap variables = migrationBuilder.getVariables();
+    migrationPlan.setVariables(variables);
 
-    validateMigrationPlan(commandContext, migrationPlan, sourceProcessDefinition, targetProcessDefinition);
+    validateMigration(commandContext, migrationPlan, sourceProcessDefinition, targetProcessDefinition);
 
     return migrationPlan;
+  }
+
+  protected void validateMigration(CommandContext commandContext,
+                                   MigrationPlanImpl migrationPlan,
+                                   ProcessDefinitionEntity sourceProcessDefinition,
+                                   ProcessDefinitionEntity targetProcessDefinition) {
+    MigrationPlanValidationReportImpl planReport = new MigrationPlanValidationReportImpl(migrationPlan);
+    VariableMap variables = migrationPlan.getVariables();
+    if (variables != null) {
+      validateVariables(variables, planReport);
+    }
+    validateMigrationInstructions(commandContext, planReport, migrationPlan,
+        sourceProcessDefinition, targetProcessDefinition);
+
+    if (planReport.hasReports()) {
+      throw LOG.failingMigrationPlanValidation(planReport);
+    }
+  }
+
+  protected void validateVariables(VariableMap variables,
+      MigrationPlanValidationReportImpl planReport) {
+    variables.keySet().forEach(name -> {
+
+      TypedValue valueTyped = variables.getValueTyped(name);
+
+      boolean javaSerializationProhibited = VariableUtil.isJavaSerializationProhibited(valueTyped);
+      if (javaSerializationProhibited) {
+
+        MigrationVariableValidationReportImpl report =
+            new MigrationVariableValidationReportImpl(name, valueTyped);
+
+        String failureMessage = MessageFormat.format(VariableUtil.ERROR_MSG, name);
+        report.addFailure(failureMessage);
+
+        planReport.addVariableReport(report);
+      }
+    });
   }
 
   protected ProcessDefinitionEntity getProcessDefinition(CommandContext commandContext, String id, String type) {
@@ -114,10 +161,14 @@ public class CreateMigrationPlanCmd implements Command<MigrationPlan> {
     return generatedInstructions.asMigrationInstructions();
   }
 
-  protected void validateMigrationPlan(CommandContext commandContext, MigrationPlanImpl migrationPlan, ProcessDefinitionImpl sourceProcessDefinition, ProcessDefinitionImpl targetProcessDefinition) {
+  protected void validateMigrationInstructions(CommandContext commandContext,
+                                               MigrationPlanValidationReportImpl planReport,
+                                               MigrationPlanImpl migrationPlan,
+                                               ProcessDefinitionImpl sourceProcessDefinition,
+                                               ProcessDefinitionImpl targetProcessDefinition) {
     List<MigrationInstructionValidator> migrationInstructionValidators = commandContext.getProcessEngineConfiguration().getMigrationInstructionValidators();
 
-    MigrationPlanValidationReportImpl planReport = new MigrationPlanValidationReportImpl(migrationPlan);
+
     ValidatingMigrationInstructions validatingMigrationInstructions = wrapMigrationInstructions(migrationPlan, sourceProcessDefinition, targetProcessDefinition, planReport);
 
     for (ValidatingMigrationInstruction validatingMigrationInstruction : validatingMigrationInstructions.getInstructions()) {
@@ -126,11 +177,6 @@ public class CreateMigrationPlanCmd implements Command<MigrationPlan> {
         planReport.addInstructionReport(instructionReport);
       }
     }
-
-    if (planReport.hasInstructionReports()) {
-      throw LOG.failingMigrationPlanValidation(planReport);
-    }
-
   }
 
   protected MigrationInstructionValidationReportImpl validateInstruction(ValidatingMigrationInstruction instruction, ValidatingMigrationInstructions instructions, List<MigrationInstructionValidator> migrationInstructionValidators) {

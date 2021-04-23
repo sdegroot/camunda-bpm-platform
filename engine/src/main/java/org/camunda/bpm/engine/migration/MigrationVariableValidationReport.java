@@ -19,30 +19,26 @@ package org.camunda.bpm.engine.migration;
 import java.util.List;
 
 /**
- * Collects the migration instruction validation reports for
- * all instructions of the migration plan which contain failures.
+ * Collects the validation failures for a single migration
+ * instruction.
  */
-public interface MigrationPlanValidationReport {
+public interface MigrationVariableValidationReport {
 
   /**
-   * @return the migration plan of the validation report
+   * @return the migration instruction of this report
    */
-  MigrationPlan getMigrationPlan();
+   String getVariableName();
 
-  boolean hasReports();
+   Object getVariableValue();
 
   /**
-   * @return true if instructions reports exist, false otherwise
+   * @return true if the report contains failures, false otherwise
    */
-  boolean hasInstructionReports();
+  boolean hasFailures();
 
   /**
-   * @return all instruction reports
+   * @return the list of failure messages
    */
-  List<MigrationInstructionValidationReport> getInstructionReports();
-
-  boolean hasVariableReports();
-
-  List<MigrationVariableValidationReport> getVariableReports();
+  List<String> getFailures();
 
 }

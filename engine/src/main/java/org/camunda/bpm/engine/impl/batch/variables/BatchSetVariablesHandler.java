@@ -22,6 +22,7 @@ import org.camunda.bpm.engine.impl.batch.BatchConfiguration;
 import org.camunda.bpm.engine.impl.batch.BatchJobConfiguration;
 import org.camunda.bpm.engine.impl.batch.BatchJobContext;
 import org.camunda.bpm.engine.impl.batch.BatchJobDeclaration;
+import org.camunda.bpm.engine.impl.core.variable.VariableUtil;
 import org.camunda.bpm.engine.impl.interceptor.CommandContext;
 import org.camunda.bpm.engine.impl.jobexecutor.JobDeclaration;
 import org.camunda.bpm.engine.impl.json.JsonObjectConverter;
@@ -52,12 +53,8 @@ public class BatchSetVariablesHandler extends AbstractBatchJobHandler<BatchConfi
     BatchConfiguration batchConfiguration = readConfiguration(configurationByteArray);
 
     String batchId = batchConfiguration.getBatchId();
-    List<VariableInstanceEntity> variableInstances = commandContext.getVariableInstanceManager()
-        .findVariableInstancesByBatchId(batchId);
-
-    Map<String, Object> variables = variableInstances.stream()
-        .collect(Collectors.toMap(VariableInstanceEntity::getName,
-            VariableInstanceEntity::getTypedValueWithImplicitUpdatesSkipped));
+    Map<String, ?> variables =
+        VariableUtil.findBatchVariablesWithImplicitUpdatesSkipped(batchId, commandContext);
 
     List<String> processInstanceIds = batchConfiguration.getIds();
 

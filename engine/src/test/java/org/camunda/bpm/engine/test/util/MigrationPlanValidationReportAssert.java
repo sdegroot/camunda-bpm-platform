@@ -24,6 +24,7 @@ import java.util.List;
 
 import org.camunda.bpm.engine.migration.MigrationInstructionValidationReport;
 import org.camunda.bpm.engine.migration.MigrationPlanValidationReport;
+import org.camunda.bpm.engine.migration.MigrationVariableValidationReport;
 import org.hamcrest.Matcher;
 import org.hamcrest.Matchers;
 import org.junit.Assert;
@@ -38,6 +39,30 @@ public class MigrationPlanValidationReportAssert {
 
   public MigrationPlanValidationReportAssert isNotNull() {
     assertNotNull("Expected report to be not null", actual);
+
+    return this;
+  }
+
+  public MigrationPlanValidationReportAssert hasVariableFailures(String name, String... expectedFailures) {
+    isNotNull();
+
+    List<String> failuresFound = new ArrayList<>();
+
+    for (MigrationVariableValidationReport variableReport : actual.getVariableReports()) {
+      String variableNameReport = variableReport.getVariableName();
+      if ((name == null && variableNameReport == null) || (name != null && name.equals(variableNameReport))) {
+        failuresFound.addAll(variableReport.getFailures());
+      }
+    }
+
+    Collection<Matcher<? super String>> matchers = new ArrayList<>();
+    for (String expectedFailure : expectedFailures) {
+      matchers.add(Matchers.containsString(expectedFailure));
+    }
+
+    Assert.assertThat("Expected failures for variable name '" + name + "':\n" + joinFailures(expectedFailures) +
+            "But found failures:\n" + joinFailures(failuresFound.toArray()),
+        failuresFound, Matchers.containsInAnyOrder(matchers));
 
     return this;
   }

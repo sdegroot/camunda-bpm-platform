@@ -16,7 +16,10 @@
  */
 package org.camunda.bpm.engine.migration;
 
+import org.camunda.bpm.engine.variable.VariableMap;
+
 import java.util.List;
+import java.util.Map;
 
 /**
  * <p>Specifies how process instances from one process definition (the <i>source process definition</i>)
@@ -44,5 +47,7 @@ public interface MigrationPlan {
    * @return the id of the process definition that is migrated to
    */
   String getTargetProcessDefinitionId();
+
+  VariableMap getVariables();
 
 }

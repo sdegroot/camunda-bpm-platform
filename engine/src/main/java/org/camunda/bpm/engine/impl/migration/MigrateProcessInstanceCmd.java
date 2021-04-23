@@ -33,7 +33,6 @@ import org.camunda.bpm.engine.BadUserRequestException;
 import org.camunda.bpm.engine.impl.ProcessEngineImpl;
 import org.camunda.bpm.engine.impl.ProcessEngineLogger;
 import org.camunda.bpm.engine.impl.cfg.CommandChecker;
-import org.camunda.bpm.engine.impl.context.Context;
 import org.camunda.bpm.engine.impl.context.ProcessApplicationContextUtil;
 import org.camunda.bpm.engine.impl.interceptor.Command;
 import org.camunda.bpm.engine.impl.interceptor.CommandContext;
@@ -57,7 +56,6 @@ import org.camunda.bpm.engine.impl.migration.validation.instance.MigratingTransi
 import org.camunda.bpm.engine.impl.migration.validation.instance.MigratingTransitionInstanceValidator;
 import org.camunda.bpm.engine.impl.persistence.entity.ExecutionEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.ProcessDefinitionEntity;
-import org.camunda.bpm.engine.impl.tree.ReferenceWalker;
 import org.camunda.bpm.engine.migration.MigrationPlan;
 
 /**
@@ -158,6 +156,13 @@ public class MigrateProcessInstanceCmd extends AbstractMigrationCmd implements C
 
     executeInContext(() -> migrateProcessInstance(migratingProcessInstance),
       migratingProcessInstance.getTargetDefinition());
+
+    Map<String, ?> variables = migrationPlan.getVariables();
+    if (variables != null) {
+      commandContext.getProcessEngineConfiguration()
+          .getRuntimeService()
+          .setVariables(processInstanceId, variables);
+    }
 
     return null;
   }

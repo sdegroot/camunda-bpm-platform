@@ -22,11 +22,13 @@ import java.util.List;
 import org.camunda.bpm.engine.migration.MigrationInstructionValidationReport;
 import org.camunda.bpm.engine.migration.MigrationPlan;
 import org.camunda.bpm.engine.migration.MigrationPlanValidationReport;
+import org.camunda.bpm.engine.migration.MigrationVariableValidationReport;
 
 public class MigrationPlanValidationReportImpl implements MigrationPlanValidationReport {
 
   protected MigrationPlan migrationPlan;
-  protected List<MigrationInstructionValidationReport> instructionReports = new ArrayList<MigrationInstructionValidationReport>();
+  protected List<MigrationInstructionValidationReport> instructionReports = new ArrayList<>();
+  protected List<MigrationVariableValidationReport> variableReports = new ArrayList<>();
 
   public MigrationPlanValidationReportImpl(MigrationPlan migrationPlan) {
     this.migrationPlan = migrationPlan;
@@ -36,8 +38,18 @@ public class MigrationPlanValidationReportImpl implements MigrationPlanValidatio
     return migrationPlan;
   }
 
+  @Override
+  public boolean hasReports() {
+    return hasVariableReports() ||
+        hasInstructionReports();
+  }
+
   public void addInstructionReport(MigrationInstructionValidationReport instructionReport) {
     instructionReports.add(instructionReport);
+  }
+
+  public void addVariableReport(MigrationVariableValidationReport variableReport) {
+    variableReports.add(variableReport);
   }
 
   public boolean hasInstructionReports() {
@@ -46,6 +58,16 @@ public class MigrationPlanValidationReportImpl implements MigrationPlanValidatio
 
   public List<MigrationInstructionValidationReport> getInstructionReports() {
     return instructionReports;
+  }
+
+  @Override
+  public boolean hasVariableReports() {
+    return !variableReports.isEmpty();
+  }
+
+  @Override
+  public List<MigrationVariableValidationReport> getVariableReports() {
+    return variableReports;
   }
 
   public void writeTo(StringBuilder sb) {
@@ -61,6 +83,14 @@ public class MigrationPlanValidationReportImpl implements MigrationPlanValidatio
         sb.append("\t\t").append(failure).append("\n");
       }
     }
+
+    variableReports.forEach(variableReport -> {
+      String variableName = variableReport.getVariableName();
+      sb.append("\t Migration variable ").append(variableName).append(" is not valid:\n");
+      for (String failure : variableReport.getFailures()) {
+        sb.append("\t\t").append(failure).append("\n");
+      }
+    });
   }
 
 }

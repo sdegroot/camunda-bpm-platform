@@ -22,18 +22,24 @@ import org.camunda.bpm.engine.impl.batch.BatchJobConfiguration;
 import org.camunda.bpm.engine.impl.batch.BatchJobContext;
 import org.camunda.bpm.engine.impl.batch.BatchJobDeclaration;
 import org.camunda.bpm.engine.impl.context.Context;
+import org.camunda.bpm.engine.impl.core.variable.VariableUtil;
 import org.camunda.bpm.engine.impl.interceptor.CommandContext;
 import org.camunda.bpm.engine.impl.jobexecutor.JobDeclaration;
 import org.camunda.bpm.engine.impl.json.MigrationBatchConfigurationJsonConverter;
 import org.camunda.bpm.engine.impl.migration.MigrationPlanExecutionBuilderImpl;
+import org.camunda.bpm.engine.impl.migration.MigrationPlanImpl;
 import org.camunda.bpm.engine.impl.persistence.entity.ByteArrayEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.ExecutionEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.JobEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.MessageEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.ProcessDefinitionEntity;
 import org.camunda.bpm.engine.migration.MigrationPlanExecutionBuilder;
+import org.camunda.bpm.engine.variable.VariableMap;
+import org.camunda.bpm.engine.variable.impl.VariableMapImpl;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Job handler for batch migration jobs. The batch migration job
@@ -61,7 +67,8 @@ public class MigrationBatchJobHandler extends AbstractBatchJobHandler<MigrationB
         processIdsForJob,
         configuration.getMigrationPlan(),
         configuration.isSkipCustomListeners(),
-        configuration.isSkipIoMappings()
+        configuration.isSkipIoMappings(),
+        configuration.getBatchId()
     );
   }
 
@@ -84,9 +91,16 @@ public class MigrationBatchJobHandler extends AbstractBatchJobHandler<MigrationB
 
     MigrationBatchConfiguration batchConfiguration = readConfiguration(configurationEntity.getBytes());
 
+    String batchId = batchConfiguration.getBatchId();
+    Map<String, ?> variables =
+        VariableUtil.findBatchVariablesWithImplicitUpdatesSkipped(batchId, commandContext);
+
+    MigrationPlanImpl migrationPlan = (MigrationPlanImpl) batchConfiguration.getMigrationPlan();
+    migrationPlan.setVariables(new VariableMapImpl(new HashMap<>(variables)));
+
     MigrationPlanExecutionBuilder executionBuilder = commandContext.getProcessEngineConfiguration()
         .getRuntimeService()
-        .newMigration(batchConfiguration.getMigrationPlan())
+        .newMigration(migrationPlan)
         .processInstanceIds(batchConfiguration.getIds());
 
     if (batchConfiguration.isSkipCustomListeners()) {

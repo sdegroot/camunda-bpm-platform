@@ -35,19 +35,30 @@ public class MigrationBatchConfiguration extends BatchConfiguration {
   public MigrationBatchConfiguration(List<String> ids,
       MigrationPlan migrationPlan,
       boolean isSkipCustomListeners,
-      boolean isSkipIoMappings) {
-    this(ids, null, migrationPlan, isSkipCustomListeners, isSkipIoMappings);
+      boolean isSkipIoMappings,
+      String batchId) {
+    this(ids, null, migrationPlan, isSkipCustomListeners, isSkipIoMappings, batchId);
   }
 
   public MigrationBatchConfiguration(List<String> ids,
                                      DeploymentMappings mappings,
                                      MigrationPlan migrationPlan,
                                      boolean isSkipCustomListeners,
-                                     boolean isSkipIoMappings) {
+                                     boolean isSkipIoMappings,
+                                     String batchId) {
     super(ids, mappings);
     this.migrationPlan = migrationPlan;
     this.isSkipCustomListeners = isSkipCustomListeners;
     this.isSkipIoMappings = isSkipIoMappings;
+    this.batchId = batchId;
+  }
+
+  public MigrationBatchConfiguration(List<String> ids,
+      DeploymentMappings mappings,
+      MigrationPlan migrationPlan,
+      boolean isSkipCustomListeners,
+      boolean isSkipIoMappings) {
+    this(ids, mappings, migrationPlan, isSkipCustomListeners, isSkipIoMappings, null);
   }
 
   public MigrationPlan getMigrationPlan() {

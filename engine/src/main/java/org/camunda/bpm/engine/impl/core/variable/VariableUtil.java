@@ -18,8 +18,11 @@ package org.camunda.bpm.engine.impl.core.variable;
 
 import org.camunda.bpm.engine.impl.ProcessEngineLogger;
 import org.camunda.bpm.engine.impl.cfg.ProcessEngineConfigurationImpl;
+import org.camunda.bpm.engine.impl.cmd.CommandLogger;
 import org.camunda.bpm.engine.impl.context.Context;
 import org.camunda.bpm.engine.impl.core.CoreLogger;
+import org.camunda.bpm.engine.impl.interceptor.CommandContext;
+import org.camunda.bpm.engine.impl.persistence.entity.VariableInstanceEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.util.TypedValueField;
 import org.camunda.bpm.engine.impl.variable.serializer.TypedValueSerializer;
 import org.camunda.bpm.engine.impl.variable.serializer.VariableSerializerFactory;
@@ -28,18 +31,24 @@ import org.camunda.bpm.engine.variable.Variables;
 import org.camunda.bpm.engine.variable.value.SerializableValue;
 import org.camunda.bpm.engine.variable.value.TypedValue;
 
+import java.text.MessageFormat;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class VariableUtil {
 
-  public static CoreLogger CORE_LOGGER = ProcessEngineLogger.CORE_LOGGER;
+  protected static final CommandLogger LOGGER = CommandLogger.CMD_LOGGER;
+
+  public static final CoreLogger CORE_LOGGER = ProcessEngineLogger.CORE_LOGGER;
+
+  public static final String ERROR_MSG = "Cannot set variable of type object with name \"{0}\". Java serialization format is forbidden";
 
   /**
    * Checks, if Java serialization will be used and if it is allowed to be used.
-   * @param variableName
    * @param value
    */
-  public static void checkJavaSerialization(String variableName, TypedValue value) {
+  public static boolean isJavaSerializationProhibited(TypedValue value) {
     ProcessEngineConfigurationImpl processEngineConfiguration =
         Context.getProcessEngineConfiguration();
 
@@ -50,8 +59,6 @@ public class VariableUtil {
 
       // if Java serialization is prohibited
       if (!serializableValue.isDeserialized()) {
-
-        String javaSerializationDataFormat = Variables.SerializationDataFormats.JAVA.getName();
         String requestedDataFormat = serializableValue.getSerializationDataFormat();
 
         if (requestedDataFormat == null) {
@@ -66,10 +73,16 @@ public class VariableUtil {
           }
         }
 
-        if (javaSerializationDataFormat.equals(requestedDataFormat)) {
-          throw CORE_LOGGER.javaSerializationProhibitedException(variableName);
-        }
+        return Variables.SerializationDataFormats.JAVA.getName().equals(requestedDataFormat);
       }
+    }
+    return false;
+  }
+
+  public static void checkJavaSerialization(String variableName, TypedValue value) {
+    if (isJavaSerializationProhibited(value)) {
+      String message = MessageFormat.format(ERROR_MSG, variableName);
+      throw CORE_LOGGER.javaSerializationProhibitedException(message);
     }
   }
 
@@ -89,6 +102,37 @@ public class VariableUtil {
         setVariableFunction.apply(variableName, value);
       }
     }
+  }
+
+  public static void setVariablesByBatchId(Map<String, ?> variables, String batchId) {
+    setVariables(variables, (name, value) -> setVariableByBatchId(batchId, name, value));
+  }
+
+  public static void setVariableByBatchId(String batchId, String variableName, Object variableValue) {
+    TypedValue variableTypedValue = Variables.untypedValue(variableValue);
+
+    boolean isTransient = variableTypedValue.isTransient();
+    if (isTransient) {
+      throw LOGGER.exceptionSettingTransientVariablesAsyncNotSupported(variableName);
+    }
+
+    VariableUtil.checkJavaSerialization(variableName, variableTypedValue);
+
+    VariableInstanceEntity variableInstance =
+        VariableInstanceEntity.createAndInsert(variableName, variableTypedValue);
+
+    variableInstance.setVariableScopeId(batchId);
+    variableInstance.setBatchId(batchId);
+  }
+
+  public static Map<String, ?> findBatchVariablesWithImplicitUpdatesSkipped(String batchId,
+      CommandContext commandContext) {
+    List<VariableInstanceEntity> variableInstances = commandContext.getVariableInstanceManager()
+        .findVariableInstancesByBatchId(batchId);
+
+    return variableInstances.stream()
+        .collect(Collectors.toMap(VariableInstanceEntity::getName,
+            VariableInstanceEntity::getTypedValueWithImplicitUpdatesSkipped));
   }
 
   @FunctionalInterface
